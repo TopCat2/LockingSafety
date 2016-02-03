@@ -11,75 +11,78 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class RunFileTest {
+/*
+ * Demo application for proposed file claimer package.  This is meant to be used so that multiple
+ * cron jobs, or even cron jobs on different systems, can try to load the same input file and
+ * simply ignore the file if it's already being worked on.
+ */
 
-
-    public static void main(String[] args) {
+public class RunFileTest
+{
+    public static void main(String[] args) throws IOException
+    {
         Logger myLog = LoggerFactory.getLogger(RunFileTest.class);
-        if (args.length < 1) {
+        if (args.length < 1)
+        {
             myLog.error("Must enter a file name; there are no arguments.");
             System.exit(1);
         }
 
         // Use the tool to claim an input file.
         InputFileClaimer claim = new InputFileClaimer();
-        InputFileClaimer.Outcome outcome;
-        outcome = claim.getLockFile(args[0]);
-        switch (outcome) {
-            case DENIED:
-                System.out.println("The lock was in use.");
-                System.exit(0);
-                break;
-            case ERROR:
-                System.out.println("There was a fatal error: " + claim.getErrMsg());
-                System.exit(1);
-                break;
+        claim.getLockFile(args[0]);
+        if (claim.wasDenied())
+        {
+            System.out.println(" The lock was in use.");
+            return;
         }
 
         // Pretend to do processing here.  Wait for user input to simulate
         // long-running processing.
         System.out.println(" You now have the file claim.  Please open the file and process it.");
 
-        int count = countInputLines(claim.getPathName());
-        System.out.println("The file has " + count + " lines.");
-
-        System.out.print("Press Enter to continue and release the claim");
-        try {
-            System.in.read();
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.exit (1);
+        // We have possession of the file.  Update its database status unless it was already completed.
+        DBPersister persister = new DBPersister();
+        if (!persister.beginProcessingFile(claim.getFileName()))
+        {
+            System.out.println(" The file has already been processed (" + claim.getFileName() + ").  Move it to the archive directory?");
+        } else {
+            // Pretend to process it and complete it in the database.
+            countInputLines(claim.getPathName());
+            persister.markFileFinished();
         }
-
         // Use the tool to release the claim on the input file.
-        outcome = claim.releaseLockFile(args[0]);
-        switch (outcome) {
-            case DENIED:
-                System.out.println("The claim was released.");
-                break;
-            case ERROR:
-                System.out.println("There was a fatal error releasing the claim: " + claim.getErrMsg());
-                System.exit(1);
-                break;
-        }
-        System.exit(0);
+        claim.releaseLockFile();
+        System.out.println(" The file claim was released.");
+
     }
 
     // Silly pretend processing
-    private static int countInputLines(String fileName) {
+    private static void countInputLines(String fileName)
+    {
         int counter = 0;
-        BufferedReader fis;
         Path inFilePath = FileSystems.getDefault().getPath(fileName);
-        try {
-            fis =  Files.newBufferedReader(inFilePath, Charset.defaultCharset());
-            while (fis.readLine() != null){
+        try (BufferedReader fis = Files.newBufferedReader(inFilePath, Charset.defaultCharset()))
+        {
+            while (fis.readLine() != null)
+            {
                 counter += 1;
             }
-            fis.close();
+            // In a try-with-resources, you don't have to close the resource.  How strange!
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return counter;
+
+        System.out.println(" The file has " + counter + " lines.");
+
+        System.out.print(" Press Enter to continue and release the claim");
+        try
+        {
+            System.in.read();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
     }
 }
 
