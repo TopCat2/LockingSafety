@@ -1,6 +1,5 @@
 package com.bjss.plynn.nioLockingDemo;
 
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,6 +9,7 @@ import java.nio.charset.Charset;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.SQLException;
 
 /*
  * Demo application for proposed file claimer package.  This is meant to be used so that multiple
@@ -19,7 +19,7 @@ import java.nio.file.Path;
 
 public class RunFileTest
 {
-    public static void main(String[] args) throws IOException
+    public static void main(String[] args) throws IOException, ClassNotFoundException, SQLException
     {
         Logger myLog = LoggerFactory.getLogger(RunFileTest.class);
         if (args.length < 1)
@@ -42,14 +42,14 @@ public class RunFileTest
         System.out.println(" You now have the file claim.  Please open the file and process it.");
 
         // We have possession of the file.  Update its database status unless it was already completed.
-        DBPersister persister = new DBPersister();
-        if (!persister.beginProcessingFile(claim.getFileName()))
+        ExecutionPersister persister = new ExecutionPersister(claim.getFileName());
+        if (!persister.claimFile())
         {
             System.out.println(" The file has already been processed (" + claim.getFileName() + ").  Move it to the archive directory?");
         } else {
             // Pretend to process it and complete it in the database.
             countInputLines(claim.getPathName());
-            persister.markFileFinished();
+            persister.completeFile();
         }
         // Use the tool to release the claim on the input file.
         claim.releaseLockFile();

@@ -93,6 +93,7 @@ public class InputFileClaimer
         claimFl.release();
         myLog.info("Released nio lock: {} for file {}", claimFl, inputFp.toString());
         claimFc.close();
+        lockGranted = false;
 
         /*
          * There is an interesting file with deleting the lock file.  Any process that still has a channel thinks

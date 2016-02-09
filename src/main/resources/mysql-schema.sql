@@ -1,5 +1,6 @@
 
 DELIMITER ;
+
 DROP PROCEDURE if exists fail_file;
 
 DELIMITER //
@@ -21,8 +22,6 @@ end
 
 DELIMITER ;
 
-
-DELIMITER ;
 DROP PROCEDURE if exists complete_file;
 
 DELIMITER //
@@ -44,31 +43,27 @@ end
 
 DELIMITER ;
 
-
 DROP PROCEDURE if exists claim_file;
 DROP FUNCTION if exists claim_file;
 
 
 DELIMITER //
-CREATE PROCEDURE claim_file (name varchar(255), out got_it BOOLEAN, out prev_status varchar(10))
+CREATE PROCEDURE claim_file (name varchar(255), out got_it BOOLEAN, out prev_status varchar(10), out prev_tries int)
 begin
 
-
 START TRANSACTION;
-
 
 INSERT INTO files_processed (
 file_name, execution_count, execution_status, begin_time,
 	complete_time, run_node, run_pid)
-VALUES (name, 0, "", NOW(),
+VALUES (name, 0, "NEW", NOW(),
 	null, "petersPC", 123)
 ON DUPLICATE KEY UPDATE
 	execution_count = execution_count;
 
-
-SELECT execution_status FROM files_processed
+SELECT execution_status, execution_count FROM files_processed
 where file_name = name
-into prev_status;
+into prev_status, prev_tries;
 
 IF prev_status = "COMPLETED" THEN
   ROLLBACK;
