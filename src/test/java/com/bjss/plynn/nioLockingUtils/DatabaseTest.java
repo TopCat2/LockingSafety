@@ -1,5 +1,6 @@
-package com.bjss.plynn.nioLockingDemo;
+package com.bjss.plynn.nioLockingUtils;
 
+import com.bjss.plynn.AbstractLoggedTest;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -8,7 +9,6 @@ import java.io.IOException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Types;
 
 public class DatabaseTest extends AbstractLoggedTest
 {
