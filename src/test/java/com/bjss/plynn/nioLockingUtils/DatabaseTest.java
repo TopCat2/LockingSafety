@@ -14,7 +14,6 @@ public class DatabaseTest extends AbstractLoggedTest
 {
     private String testFileName = "FileForConnectionTesting.txt";
     private ExecutionPersister ep;
-    private Connection conn;
 
     /*
       *  These tests depend on starting with a specific record not in the database.
@@ -25,7 +24,7 @@ public class DatabaseTest extends AbstractLoggedTest
 
     private void removeRecord() throws SQLException
     {
-        conn = ep.ConnectToDB();
+        Connection conn = ep.ConnectToDB();
         CallableStatement doPC = conn.prepareCall("DELETE FROM files_processed WHERE file_name = ?");
         doPC.setString(1, testFileName);
         doPC.executeUpdate();

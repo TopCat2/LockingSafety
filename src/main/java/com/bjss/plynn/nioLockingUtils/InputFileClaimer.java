@@ -1,10 +1,4 @@
-package com.bjss.plynn.nioLockingDemo;
-
-/*
- *  Class uses advisory locking on a separate .lock file to
- *  coordinate the use of an input file among cooperating
- *  processes.  The input file itself is not touched.
- */
+package com.bjss.plynn.nioLockingUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,30 +13,47 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/**
+ *  Class uses advisory locking on a separate .lock file to
+ *  coordinate the use of an input file among cooperating
+ *  processes.  The input file itself is not touched.
+ */
+
 public class InputFileClaimer
 {
     public static final String LOCKFILEEXTENSION = ".lock"; // Append to file name to get lock file name
     Boolean initialized;
     Logger myLog;
-    String errMsg;
     FileChannel claimFc;
     FileLock claimFl;
     Path inputFp;
     Boolean lockGranted;
 
-    InputFileClaimer()
+    public InputFileClaimer()
     {
         initialized = false;
         myLog = LoggerFactory.getLogger(InputFileClaimer.class);
     }
 
+    /**
+     * Creates or opens the .lock file and attampts to claim the lock.
+     * @param fileName
+     * @throws IOException
+     */
     // Create or open the .lock file and attempt to claim the "lock."
+
+    /**
+     * Create or open the .lock file and attempt to claim the "lock."
+     * @param fileName      Full path to the file
+     * @throws IOException  Improper use,target not readable file, or failure creating the .lock file
+     * @return              TRUE if the lock could be claimed; False if it was already in use.
+     */
     public void getLockFile(String fileName) throws IOException
     {
         // Error on already in use
         if (initialized)
         {
-            throw new IllegalStateException("InputFileClaimer.getLockFile() invoken on already initialized object");
+            throw new IllegalStateException("InputFileClaimer.getLockFile() invoked on already initialized object");
         }
 
         // Throw exception on not a file...
@@ -61,7 +72,7 @@ public class InputFileClaimer
         initialized = true;
         // Open the channel to the file or throws an exception
         claimFc = new RandomAccessFile(inputFp.toString() + LOCKFILEEXTENSION, "rw").getChannel();
-        myLog.info("Got FileChannel: {} for file {}", claimFc, inputFp.toString());
+        myLog.debug("Got FileChannel: {} for file {}", claimFc, inputFp.toString());
 
         // Try to claim the lock
         claimFl = claimFc.tryLock();
@@ -69,19 +80,20 @@ public class InputFileClaimer
         // Set status based on whether or not the lock was available.
         if (claimFl == null)
         {
-            myLog.info("Did not get nio lock for file {}", inputFp.toString());
+            myLog.debug("Did not get nio lock for file {}", inputFp.toString());
             lockGranted = false;
         } else
         {
-            myLog.info("Got nio lock: {} for file {}", claimFl, inputFp.toString());
+            myLog.debug("Got nio lock: {} for file {}", claimFl, inputFp.toString());
             lockGranted = true;
         }
     }
-
-    // "Release the lock."  Implementation is loosely defined.  It could
-    // simply release the lock, close the channel to the lock file, or
-    // even delete the lock file.
-
+    /**
+     *  "Release the lock."  Implementation is loosely defined.  It could
+     *  simply release the lock, close the channel to the lock file, or
+     *  even delete the lock file.
+     * @throws IOException  Improper use or failure during lock manipulation.
+     */
     public void releaseLockFile() throws IOException
     {
         // Error on already in use
@@ -91,7 +103,7 @@ public class InputFileClaimer
         }
 
         claimFl.release();
-        myLog.info("Released nio lock: {} for file {}", claimFl, inputFp.toString());
+        myLog.debug("Released nio lock: {} for file {}", claimFl, inputFp.toString());
         claimFc.close();
         lockGranted = false;
 
@@ -104,25 +116,22 @@ public class InputFileClaimer
         {
             Files.delete(FileSystems.getDefault().getPath(inputFp.toString() + LOCKFILEEXTENSION));
         } catch (IOException e) {
-            myLog.info("Failed to delete lock file.  Exception is {}", e.toString());
+            myLog.info("Failed to delete lock file.  Unexpected but not harmful condition.  The exception is {}", e.toString());
         }
     }
 
-    public String getPathName()
+    // Return the full path to the file
+    public String getFullPathName()
     {
         return inputFp.toString();
     }
 
+    // Return the file name only, with no path
     public String getFileName()
     {
         Path nameOnly = inputFp.getFileName();
         String name = nameOnly.toString();
         return name;
-    }
-
-    public String getErrMsg()
-    {
-        return errMsg;
     }
 
     public Boolean wasDenied()

@@ -9,6 +9,8 @@ import java.util.Properties;
 
 public class ExecutionPersister implements AutoCloseable
 {
+    // The code is very tightly coupled to the database and database code.
+    // It might benefit from en extra layer of abstraction.
     // DB configuration constants
     static final String DBPROPERTIESFILE = "db.properties";
     static final String COLNAME_FILENAME = "name";
@@ -25,6 +27,8 @@ public class ExecutionPersister implements AutoCloseable
     String JDBC_DB_URL;
 
     Logger myLog;
+
+    // Persistent state
     private int previousTries = -1;
     private Boolean haveFileClaimed;
 
@@ -42,13 +46,14 @@ public class ExecutionPersister implements AutoCloseable
         prop.load(iStream);
         iStream.close();
 
-        //  Database credentials"
+        //  Database credentials
         JDBC_USER = prop.getProperty("db.jdbc.user", "NULL");
         JDBC_PASS = prop.getProperty("db.jdbc.password", "NULL");
         JDBC_DRIVER = prop.getProperty("db.jdbc.driver", "NULL");
         JDBC_DB_URL = prop.getProperty("db.jdbc.url", "NULL");
         //Register JDBC driver
         Class.forName(JDBC_DRIVER);
+
         haveFileClaimed = false;
     }
 
@@ -68,11 +73,10 @@ public class ExecutionPersister implements AutoCloseable
             myEP.failFile();
 
             myEP.claimFile();
-            myEP.claimFile();
 
             myEP.completeFile();
 
-            System.out.println("Post-completed call to claimFile should fail.  The result is "
+            System.out.println("Post-completed call to claimFile should return false.  The result is "
                     + myEP.claimFile());
         } catch (Exception e) {
             // Need a PrintStream to get the stack trace into the logger.

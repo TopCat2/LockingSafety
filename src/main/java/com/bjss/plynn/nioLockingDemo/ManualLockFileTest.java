@@ -14,13 +14,21 @@ import java.nio.channels.FileLock;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+/**
+ * Testing application to manually exercise NIO file locks directly.  Not a
+ * part of the lock-and-persist package, but meant to be used in testing it.
+ * The single argument is the name of the file to be locked (not the lock file name).
+ * Accepts manual input to Lock, Unlock, Wait for a lock on the file, or Quit.
+ * Testing requires two processes in SEPARATE JVMs as an NIO lock is JVM wide.
+ */
 
-public class SimpleRunFileTest {
+public class ManualLockFileTest
+{
 
 
     public static void main(String[] args)
     {
-        Logger myLog = LoggerFactory.getLogger(SimpleRunFileTest.class);
+        Logger myLog = LoggerFactory.getLogger(ManualLockFileTest.class);
         if (args.length < 1) {
             myLog.error("Must enter a file name; there are no arguments.");
             System.exit(1);

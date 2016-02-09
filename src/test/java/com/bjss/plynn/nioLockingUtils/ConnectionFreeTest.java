@@ -11,7 +11,7 @@ import java.sql.Connection;
 
 public class ConnectionFreeTest extends AbstractLoggedTest
 {
-    private String testFileName = "FileForJunitTesting.txt";
+    private String testFileName = "FileForConnectionTesting.txt";
     private ExecutionPersister ep;
     private Connection conn;
 

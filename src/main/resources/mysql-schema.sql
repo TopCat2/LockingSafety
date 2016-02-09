@@ -1,3 +1,15 @@
+DROP TABLE IF EXISTS files_processed;
+
+CREATE TABLE `files_processed` (
+  `file_name` varchar(128) NOT NULL,
+  `execution_count` int(11) NOT NULL,
+  `execution_status` varchar(9) NOT NULL,
+  `begin_time` datetime NOT NULL,
+  `complete_time` datetime DEFAULT NULL,
+  PRIMARY KEY (`file_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+
 
 DELIMITER ;
 
@@ -54,10 +66,8 @@ begin
 START TRANSACTION;
 
 INSERT INTO files_processed (
-file_name, execution_count, execution_status, begin_time,
-	complete_time, run_node, run_pid)
-VALUES (name, 0, "NEW", NOW(),
-	null, "petersPC", 123)
+file_name, execution_count, execution_status, begin_time, complete_time)
+VALUES (name, 0, "NEW", NOW(),null)
 ON DUPLICATE KEY UPDATE
 	execution_count = execution_count;
 
