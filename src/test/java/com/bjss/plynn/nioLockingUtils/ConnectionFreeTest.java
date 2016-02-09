@@ -30,7 +30,7 @@ public class ConnectionFreeTest extends AbstractLoggedTest
     @Test
     public void connectTest() throws IOException, ClassNotFoundException, SQLException
     {
-        Connection conn = ep.ConnectToDB();
+        assert(ep.ConnectToDB() != null);
     }
 
     @Test (expectedExceptions = java.lang.IllegalStateException.class, sequential = true)
