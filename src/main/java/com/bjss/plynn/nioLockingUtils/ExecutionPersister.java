@@ -13,7 +13,8 @@ public class ExecutionPersister implements AutoCloseable
     // It might benefit from en extra layer of abstraction.
     // DB configuration constants
     static final String DBPROPERTIESFILE = "db.properties";
-    static final String COLNAME_FILENAME = "name";
+    static final String VARNAME_FILENAME = "name";
+    static final String VARNAME_RECORDS = "recs";
     static final String VARNAME_CLAIMED = "got_it";
     static final String VARNAME_PREVSTATUS = "prev_status";
     static final String VARNAME_MISSING = "file_missing";
@@ -30,6 +31,7 @@ public class ExecutionPersister implements AutoCloseable
 
     // Persistent state
     private int previousTries = -1;
+    private String previousStatus = "";
     private Boolean haveFileClaimed;
 
     public ExecutionPersister(String name) throws IOException, ClassNotFoundException
@@ -74,7 +76,7 @@ public class ExecutionPersister implements AutoCloseable
 
             myEP.claimFile();
 
-            myEP.completeFile();
+            myEP.completeFile(7);
 
             System.out.println("Post-completed call to claimFile should return false.  The result is "
                     + myEP.claimFile());
@@ -119,7 +121,7 @@ public class ExecutionPersister implements AutoCloseable
         try (Connection conn = ConnectToDB();
              CallableStatement doPC = conn.prepareCall("{call claim_file (?, ?, ?, ?)}"))
         {
-            doPC.setString(COLNAME_FILENAME, myFileName);
+            doPC.setString(VARNAME_FILENAME, myFileName);
             doPC.registerOutParameter(VARNAME_CLAIMED, Types.BOOLEAN);
             doPC.registerOutParameter(VARNAME_PREVSTATUS, Types.VARCHAR);
             doPC.registerOutParameter(VARNAME_TRIES, Types.INTEGER);
@@ -128,13 +130,13 @@ public class ExecutionPersister implements AutoCloseable
             previousTries = doPC.getInt(VARNAME_TRIES);
             if (myLog.isDebugEnabled())
             {
-                String prevStatus = doPC.getString(VARNAME_PREVSTATUS);
-                if (prevStatus == null)
+                previousStatus = doPC.getString(VARNAME_PREVSTATUS);
+                if (previousStatus == null)
                 {
-                    prevStatus = "null";
+                    previousStatus = "null";
                 }
-                myLog.debug("File " + myFileName + " was previously " + prevStatus
-                        + " for " + previousTries
+                myLog.debug("File " + myFileName + " was previously " + previousStatus
+                        + " after " + previousTries
                         + " tries. The return from the stored procedure execution was " + claimSucceeded);
             }
         }   // AutoCloseable resources closed on leaving the try block
@@ -143,56 +145,79 @@ public class ExecutionPersister implements AutoCloseable
         return claimSucceeded;
     }
 
-    public void failFile() throws SQLException
+
+
+    private void markFile(String procedureName, String word) throws SQLException
     {
-        myLog.debug("Accessing database to mark file as failed");
+        myLog.debug("Accessing database to mark file as " + word);
         if (! haveFileClaimed)
         {
-            throw new IllegalStateException("Attempt to fail file " + myFileName + " but it was not claimed by this process");
+            throw new IllegalStateException("Attempt to " + word + " file " + myFileName + " but it was not claimed by this process");
         }
 
         try (Connection conn = ConnectToDB();
-             CallableStatement doPC = conn.prepareCall("{call fail_file (?, ?)}"))
+             CallableStatement doPC = conn.prepareCall("{call " + procedureName + " (?, ?)}"))
         {
-            doPC.setString(COLNAME_FILENAME, myFileName);
+            doPC.setString(VARNAME_FILENAME, myFileName);
             doPC.registerOutParameter(VARNAME_MISSING, Types.BOOLEAN);
             doPC.executeUpdate();
 
             if (doPC.getBoolean(VARNAME_MISSING)) {
-                throw new IllegalStateException("Attempt to fail file " + myFileName +" but it was not found in the database");
+                throw new IllegalStateException("Attempt to " + word + " file " + myFileName +" but it was not found in the database");
             }
-            myLog.debug("File " + myFileName + " was marked failed.");
+            myLog.debug("File " + myFileName + " was marked as " + word + ".");
         }
         haveFileClaimed = false;
     }
 
-    public void completeFile() throws SQLException
+    public void failFile() throws SQLException
     {
-        myLog.debug("Accessing database to mark file as completed");
+        markFile("fail_file", "fail");
+    }
+
+    public void cancelFile() throws SQLException
+    {
+        markFile("cancel_file", "cancel");
+    }
+
+    public void rejectFile() throws SQLException
+    {
+        markFile("reject_file", "reject");
+    }
+
+    public void completeFile(int numRecords) throws SQLException
+    {
+        myLog.debug("Accessing database to mark file as completed.");
         if (! haveFileClaimed)
         {
-            throw new IllegalStateException("Attempt to complete file " + myFileName + " but it was not claimed by this process");
+            throw new IllegalStateException("Attempt to mark file " + myFileName + " complete but it was not claimed by this process");
         }
 
         try (Connection conn = ConnectToDB();
-             CallableStatement doPC = conn.prepareCall("{call complete_file (?, ?)}"))
+             CallableStatement doPC = conn.prepareCall("{call complete_file (?, ?, ?)}"))
         {
-            doPC.setString(COLNAME_FILENAME, myFileName);
+            doPC.setString(VARNAME_FILENAME, myFileName);
+            doPC.setInt(VARNAME_RECORDS, numRecords);
             doPC.registerOutParameter(VARNAME_MISSING, Types.BOOLEAN);
             doPC.executeUpdate();
 
-            if (doPC.getBoolean(VARNAME_MISSING))
-            {
-                throw new IllegalStateException("Attempt to complete file " + myFileName + " but it was not found in the database");
+            if (doPC.getBoolean(VARNAME_MISSING)) {
+                throw new IllegalStateException("Attempt to mark file " + myFileName +" complete but it was not found in the database");
             }
-            myLog.debug("File " + myFileName + " was marked completed.");
+            myLog.debug("File " + myFileName + " was marked as complete .");
         }
         haveFileClaimed = false;
     }
+
 
     public int getPreviousTries ()
     {
         return previousTries;
+    }
+
+    public String getPreviousStatus()
+    {
+        return previousStatus;
     }
 
     @Override

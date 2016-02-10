@@ -42,7 +42,7 @@ public class ConnectionFreeTest extends AbstractLoggedTest
     @Test (expectedExceptions = java.lang.IllegalStateException.class, sequential = true)
     public void completeWithoutClaimShouldThrowException() throws SQLException
     {
-        ep.completeFile();
+        ep.completeFile(7);
     }
 
 }

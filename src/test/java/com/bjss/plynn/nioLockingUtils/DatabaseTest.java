@@ -44,7 +44,7 @@ public class DatabaseTest extends AbstractLoggedTest
         ep = null;
     }
 
-    @Test (expectedExceptions = java.lang.IllegalStateException.class, sequential = true)
+   @Test (groups = "useDB", expectedExceptions = java.lang.IllegalStateException.class, sequential = true)
     public void failMissingFileShouldThrowException() throws Exception
     {
         assert(ep.claimFile());
@@ -52,15 +52,15 @@ public class DatabaseTest extends AbstractLoggedTest
         ep.failFile();
     }
 
-    @Test (expectedExceptions = java.lang.IllegalStateException.class, sequential = true)
+   @Test (groups = "useDB", expectedExceptions = java.lang.IllegalStateException.class, sequential = true)
     public void completeMissingFileShouldThrowException() throws Exception
     {
         assert(ep.claimFile());
         removeRecord();         // Delete the record; it should not be found by the next step.
-        ep.completeFile();
+        ep.completeFile(7);
     }
 
-    @Test (sequential = true)
+   @Test (groups = "useDB", sequential = true)
     public void validSequence() throws Exception
     {
         // Claim and fail the file; previous should be zero.
@@ -76,15 +76,15 @@ public class DatabaseTest extends AbstractLoggedTest
         // Claim and complete the file; previous should be two.
         assert(ep.claimFile());
         assert(ep.getPreviousTries() == 2);
-        ep.completeFile();
+        ep.completeFile(7);
     }
 
-    @Test (sequential = true)
+   @Test (groups = "useDB", sequential = true)
     public void claimCompleteShouldBeFalse() throws Exception
     {
         assert(ep.claimFile());
         assert(ep.getPreviousTries() == 0);
-        ep.completeFile();
+        ep.completeFile(7);
 
         // Claiming a completed file should return false
         assert(! ep.claimFile());

@@ -29,6 +29,15 @@
             </plugins>
         </pluginManagement> -->
         <plugins>
+            <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>2.19.1</version>
+            <configuration>
+<!-- Comment out the next line to perform tests that require a database -->
+             <excludedGroups>useDB</excludedGroups>
+            </configuration>
+
+            </plugin>
             <!-- Set compiler version -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -10,7 +10,8 @@ import java.nio.charset.Charset;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.SQLException;
+import java.nio.file.StandardCopyOption;
+import java.util.Properties;
 
 /*
  * Demo application for proposed file claimer package.  This is meant to be used so that multiple
@@ -21,89 +22,199 @@ import java.sql.SQLException;
 public class RunFileTest
 {
     static Logger myLog;
+    static final String WRAPPERPROPERTIESFILE = "wrapper.properties";
+
+    // Configuration parameters read from file
+    static String DIRECTORY_COMPLETED;
+    static String DIRECTORY_REJECTED;
+    static String DIRECTORY_FAILED;
+    static int MAX_TRIES;
 
     public static void main(String[] args)
     {
-        Logger myLog = LoggerFactory.getLogger(RunFileTest.class);
-        if (args.length < 1)
-        {
-            myLog.error("Must enter a file name; there are no arguments.");
-            System.exit(1);
-        }
+        myLog = LoggerFactory.getLogger(RunFileTest.class);
 
-        // Variables that need to persist outside of the try blocks.
-        Boolean persisterGotFile;
         InputFileClaimer claim;
         ExecutionPersister persister;
+        Integer recordsProcessed;
+        String fullFilePath;
+
         try
         {
+            if (args.length < 1)
+            {
+                myLog.error("Must enter a file name; there are no arguments.");
+                // this is mostly in a throw to allow refactoring the setup into a separate method.
+                throw new IllegalArgumentException("Application executed but no file name entered");
+            }
+
+            // Read properties file wrapper.properties
+            readPropertiesFile();
+
             // Use the tool to claim an input file.
             claim = new InputFileClaimer();
             claim.getLockFile(args[0]);
             if (claim.wasDenied())
             {
-                myLog.info(" The lock was in use.  The file is already being loaded by another process.");
+                myLog.info(" The lock on " + args[0] + " was in use.  The file is already being loaded by another process.  No need to continue.");
                 return;
             }
+            fullFilePath = claim.getFullPathName();
 
-            // Pretend to do processing here.  Wait for user input to simulate
-            // long-running processing.
-            System.out.println(" You now have the file lock.  Claim it in the database....");
+            myLog.debug("Got the file lock.  Claim it in the database....");
 
             // We have physical possession of the file.  Update its database status unless it was already completed.
             persister = new ExecutionPersister(claim.getFileName());
-            System.out.println(" You now have the file claim.  Please open the file and process it.");
+            // Test for file should no longer be run
+            if (! persister.claimFile())
+            {
+                myLog.error(" The file has already been processed or canceled (" + fullFilePath + ").  It is a duplicate and should be resolved");
+// Notify operations here?
+                claim.releaseLockFile();
+                moveFileToFailed(fullFilePath);
+                return;
+            }
 
-            persisterGotFile = persister.claimFile();
+            // Test for maximum permissible tries exceeded.  Need to test here
+            // in case the application has repeatedly crashed without marking the file.
+            if (persister.getPreviousTries() > MAX_TRIES)
+            {
+                flagFailureForAttention("The file has been retried too many times (" + persister.getPreviousTries()
+                    + ").  File " + fullFilePath + " will be moved to the failure directory.  This must be investigated.");
+                moveFileToFailed(fullFilePath);
+                persister.failFile();
+                claim.releaseLockFile();
+                return;
+            }
 
-        } catch (IOException| SQLException | ClassNotFoundException ex)
-        {
-            flagApplicationFailureForAttention(ex);
-            return;
-        }
-        if (! persisterGotFile)
-        {
-            System.out.println(" The file has already been processed (" + claim.getFileName() + ").  It is a duplicate and should be resolved");
-            return;
-        }
-
-        // Pretend to process it and complete it in the database.  Wait for user input to simulate long-running
-        // processing. Note that this is not in the try-catch blocks that deal with locking and persistence.
-        countInputLines(claim.getFullPathName());
-
-        try {
-            persister.completeFile();
-            // Use the tool to release the claim on the input file.
+            // Validate the file.
+            myLog.debug("Got the file claim.  Now validate and process it.");
+            Boolean rejected = ! validateInputFile(claim.getFullPathName());
+            if (rejected)
+            {
+                moveFileToRejected(fullFilePath);
+                persister.rejectFile();
+                flagFileRejectForAttention("The file failed format validation.  Move the file to the REJECTED directory and alert customer support.");
+            } else
+            {
+                // Process the file and complete it in the database.
+                recordsProcessed = loadInputFile(claim.getFullPathName());
+                myLog.info("Loaded " + recordsProcessed + " records from file " + claim.getFileName());
+                moveFileToCompleted(fullFilePath);
+                persister.completeFile(recordsProcessed);
+            }
             claim.releaseLockFile();
-
-        } catch (IOException | SQLException ex)
+        } catch (Exception ex)
         {
-            flagApplicationFailureForAttention(ex);
+            flagFailureForAttention(ex);
         }
-        System.out.println(" The file claim and lock were released.");
 
     }
 
+    private static void moveFile(String fullFilePath, String targetDirectory) throws IOException
+    {
+        Path sourceFile = FileSystems.getDefault().getPath(fullFilePath);
+        Path targetLoc = FileSystems.getDefault().getPath(targetDirectory, sourceFile.getFileName().toString());
+        Files.move(sourceFile, targetLoc);
+    }
+
+    private static void moveFileToCompleted(String fullFilePath) throws IOException
+    {
+        moveFile(fullFilePath, DIRECTORY_COMPLETED);
+    }
+
+    private static void moveFileToRejected(String fullFilePath) throws IOException
+    {
+        moveFile(fullFilePath, DIRECTORY_REJECTED);
+    }
+
+   private static void moveFileToFailed(String fullFilePath) throws IOException
+    {
+        moveFile(fullFilePath, DIRECTORY_FAILED);
+    }
+
     /**
-     * Method to alert designated operations persons that an unexpected appliaction error
+     * Method to alert designated operations persons that an unexpected application error
      * has occurred.  This must be resolved at highest priority as it may have stopped
      * a file from being processed
      * @param ex The exception thrown in the coordination
      */
-    private static void flagApplicationFailureForAttention(Exception ex)
+    private static void flagFailureForAttention(Exception ex)
     {
+        myLog.error("Unexpected exception occurred in the loading application or utility code.  This must be investigated.  Cause follows:");
         // Need a PrintStream to get the stack trace into the logger.
-        Logger myLog = LoggerFactory.getLogger(ExecutionPersister.class);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream ps = new PrintStream(baos);
         ex.printStackTrace(ps);
-
-        myLog.error("Exception occurred in the file locking / claiming code.  This must be investigated.  Cause follows:");
         myLog.error(baos.toString());
+
+        myLog.info("Dummy alert to Operations");
+//  Send the email or other notification to Operations
     }
 
-    // Silly pretend processing
-    private static void countInputLines(String fileName)
+    private static void flagFailureForAttention(String message)
+    {
+
+        myLog.error(message);
+        myLog.info("Dummy alert to Operations");
+//  Send the email or other notification to Operations
+    }
+
+    private static void flagFileRejectForAttention(String message)
+    {
+//  Send the email or other notification to customer service
+        myLog.warn(message);
+        myLog.info("Dummy alert to Customer Service");
+    }
+
+    static void readPropertiesFile() throws IOException
+    {
+        Properties prop = new Properties();
+        InputStream iStream = ExecutionPersister.class.getClassLoader().getResourceAsStream(WRAPPERPROPERTIESFILE);
+        if (iStream == null)
+        {
+            throw new FileNotFoundException("Property file " + WRAPPERPROPERTIESFILE + "was not found in the classpath");
+        }
+        prop.load(iStream);
+        iStream.close();
+
+        //  Database credentials
+        DIRECTORY_COMPLETED  = prop.getProperty("wrapper.directory.completed", "BadValue");
+        DIRECTORY_REJECTED = prop.getProperty("wrapper.directory.rejected", "BadValue");
+        DIRECTORY_FAILED = prop.getProperty("wrapper.directory.failed", "BadValue");
+        MAX_TRIES = Integer.parseInt(prop.getProperty("db.jdbc.url", "1"));
+    }
+
+
+
+    // Trivial pretend validation
+    private static boolean validateInputFile(String fileName) throws IOException
+    {
+        System.out.println(" *** Pretending to validate the input file.");
+        System.out.print(" *** Press Enter to continue and pass, R to fail validation, E to throw an exception ");
+        int inInt = 0;
+        try
+        {
+            inInt = System.in.read();
+        } catch (IOException e)
+        {
+            e.printStackTrace();
+            System.exit(1);
+        }
+        if (inInt == 'R' || inInt == 'r')
+        {
+            System.out.println(" *** Pretending that the file was rejected during validation.");
+            return false;
+        } else if (inInt == 'E' || inInt == 'e')
+        {
+            System.out.println(" *** Pretending that the file load threw an exception.");
+            throw new IOException("User-simulated exception during file load.");
+        }
+        return true;
+    }
+
+    // trivial pretend processing
+    private static int loadInputFile(String fileName) throws IOException
     {
         int counter = 0;
         Path inFilePath = FileSystems.getDefault().getPath(fileName);
@@ -114,20 +225,27 @@ public class RunFileTest
                 counter += 1;
             }
             // In a try-with-resources, you don't have to close the resource.  How strange!
-        } catch (Exception e) {
-            e.printStackTrace();
+            // Don't catch exceptions; they should return upwards.
         }
 
-        System.out.println(" The file has " + counter + " lines.");
+        System.out.println(" +++ Pretending to load input file.  The file has " + counter + " lines.");
 
-        System.out.print(" Press Enter to continue and release the claim");
+        System.out.print(" +++ Press Enter to continue and simulate a good load, E to throw an exception ");
+        int inInt = 0;
         try
         {
-            System.in.read();
-        } catch (IOException e) {
+            inInt = System.in.read();
+        } catch (IOException e)
+        {
             e.printStackTrace();
             System.exit(1);
         }
+        if (inInt == 'e' || inInt == 'E')
+        {
+            System.out.println(" +++ Pretending that the file failed to load.");
+            throw new IOException("User-simulated failure of file load.");
+        }
+        return counter;
     }
 }
 
