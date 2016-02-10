@@ -1,7 +1,7 @@
-package com.bjss.plynn.nioLockingDemo;
+package com.bjss.plynn.fileLoadLockingDemo;
 
-import com.bjss.plynn.nioLockingUtils.ExecutionPersister;
-import com.bjss.plynn.nioLockingUtils.InputFileClaimer;
+import com.bjss.plynn.fileLoadLockingUtils.ExecutionPersister;
+import com.bjss.plynn.fileLoadLockingUtils.InputFileClaimer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,7 +10,6 @@ import java.nio.charset.Charset;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
 /*

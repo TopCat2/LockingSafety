@@ -56,7 +56,7 @@
                         <manifest>
                             <addClasspath>true</addClasspath>
                             <classpathPrefix>lib/</classpathPrefix>
-                            <mainClass>com.bjss.plynn.nioLockingDemo.RunFileTest</mainClass>
+                            <mainClass>com.bjss.plynn.fileLoadLockingDemo.RunFileTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

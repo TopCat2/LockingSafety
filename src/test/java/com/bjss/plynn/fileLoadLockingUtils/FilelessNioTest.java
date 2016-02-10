@@ -1,4 +1,4 @@
-package com.bjss.plynn.nioLockingUtils;
+package com.bjss.plynn.fileLoadLockingUtils;
 
 import com.bjss.plynn.AbstractLoggedTest;
 import org.testng.annotations.Test;

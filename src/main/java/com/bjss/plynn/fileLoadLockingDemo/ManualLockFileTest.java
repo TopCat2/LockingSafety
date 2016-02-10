@@ -1,4 +1,4 @@
-package com.bjss.plynn.nioLockingDemo;
+package com.bjss.plynn.fileLoadLockingDemo;
 
 
 import org.slf4j.Logger;
